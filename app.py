@@ -274,6 +274,7 @@ INDEX_HTML = """
       <div><strong id="modalTitle">Bill Preview</strong></div>
       <div><button onclick="closeRaiseModal()">Close</button></div>
     </div>
+    <input type="hidden" id="modalBillNo"/>
     <div id="printArea" style="margin-top:12px"></div>
     <div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end">
       <select id="paymentSelect"><option>Cash</option><option>Paytm</option><option>Card</option><option>UPI</option></select>
@@ -398,16 +399,26 @@ async function addMenu(){
   }
 }
 
-function openRaiseModal(){
+async function openRaiseModal(){
   if(!ACTIVE_TABLE) return alert('Open a table');
   const cart = CARTS[ACTIVE_TABLE];
   if(Object.keys(cart).length===0) return alert('Cart empty');
+  // Get next bill number
+  const nextRes = await fetch('/api/next_bill_no');
+  const j = await nextRes.json();
+  document.getElementById('modalBillNo').value = j.next;
   // build HTML
   const printArea = document.getElementById('printArea');
   const hotel = document.getElementById('hotelName').value;
   const addr = document.getElementById('hotelAddr').value;
+  const currentDate = new Date();
   let html = `<div style="text-align:center"><h2>${hotel}</h2><div>${addr}</div><hr/></div>`;
-  html += `<div><strong>Table: ${ACTIVE_TABLE}</strong></div>`;
+  html += `<div>
+    <div><strong>Bill No: </strong>${document.getElementById('modalBillNo').value}</div>
+    <div><strong>Date: </strong>${currentDate.toLocaleDateString()}</div>
+    <div><strong>Time: </strong>${currentDate.toLocaleTimeString()}</div>
+    <div><strong>Table: </strong>${ACTIVE_TABLE}</div>
+  </div>`;
   html += `<table style="width:100%;border-collapse:collapse"><thead><tr><th style="text-align:left">S.no</th><th style="text-align:left">Item</th><th style="text-align:right">Qty</th><th style="text-align:right">Rate</th><th style="text-align:right">Amt</th></tr></thead><tbody>`;
   let total = 0; let i = 1;
   Object.values(cart).forEach(it=>{
@@ -422,12 +433,75 @@ function openRaiseModal(){
 
 function closeRaiseModal(){ document.getElementById('raiseModal').style.display = 'none'; }
 
-function printPreview(){
-  const w = window.open('', '_blank', 'width=600,height=800');
-  w.document.write(document.getElementById('printArea').innerHTML);
+function printPreview() {
+  const content = document.getElementById('printArea').innerHTML;
+  const w = window.open('', '_blank', 'width=350,height=600');
+
+  w.document.write(`
+    <html>
+    <head>
+      <meta charset="utf-8"/>
+      <title>Print Bill</title>
+      <style>
+        @media print {
+          @page {
+            size: 58mm auto; /* ✅ Perfect for small thermal printers */
+            margin: 0;
+          }
+          body {
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            line-height: 1.3;
+            padding: 6px;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 5px;
+          }
+          th, td {
+            text-align: left;
+            padding: 2px 0;
+          }
+          th {
+            border-bottom: 1px dashed #000;
+            font-weight: bold;
+          }
+          td:last-child, th:last-child {
+            text-align: right;
+          }
+          hr {
+            border: 0;
+            border-top: 1px dashed #000;
+            margin: 4px 0;
+          }
+          h2 {
+            font-size: 13px;
+            margin: 2px 0;
+          }
+          .center {
+            text-align: center;
+          }
+          .total {
+            font-weight: bold;
+            text-align: right;
+            margin-top: 4px;
+          }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="center">${content}</div>
+    </body>
+    </html>
+  `);
+
   w.document.close();
+  w.focus();
   w.print();
+  w.close();
 }
+
 
 async function saveBill(){
   if(!ACTIVE_TABLE) return alert('Open a table');
